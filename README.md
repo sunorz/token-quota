@@ -15,7 +15,7 @@ Chinese version: [README-zh.md](README-zh.md)
 | `README-zh.md` | This guide (Chinese) | Same content as `README.md` |
 | `token-quota.html.template` | Quota page template | Fill in the placeholders, drop the `.template` suffix, and place it on the new host as `token-quota.html` |
 | `images/hero-video.mp4` | Hero video | Place it on the new host together with the template (in an `images/` directory) |
-| `images/cotton-poster.jpg` | Hero poster | Same as above; also the `.hero` element's own background layer |
+| `images/forest-poster.jpg` | Hero poster | Same as above; also the `.hero` element's own background layer |
 
 Every `__PLACEHOLDER__` in the template must be filled in with the new
 host's real values (see Section 3). The file cannot be used as-is until
@@ -42,8 +42,7 @@ its values using the table in Section 3).
   re-synced every 60 seconds, ticking every second.
 - Hero video: still behind frosted glass on load; hover or tap to play,
   tap again or move the mouse away and it must STOP (pause + back to
-  frame 0), not pause. Clicking the clock card reveals a line of English
-  below it, kept until refresh.
+  frame 0), not pause.
 - Theme: **no toggle button** — it only follows the system
   `prefers-color-scheme`, like Bing's "System default"; when the system
   changes, it changes.
@@ -71,24 +70,24 @@ written out.
 | `__AI_2__` | Card 2 AI name | (private, redacted) | Same as above |
 | `__START_2__` | Card 2 start moment | (private, redacted) | Same as above |
 | `__CYCLE_2__` | Card 2 cycle | `7d` | Same as above |
-| `__EXPIRES_2__` | Card 2 expiry moment | (private, redacted) | Optional; if there is no expiry, delete the whole `, expires: "__EXPIRES_2__"` part |
+| `__SOFTWARE_3__` | Card 3 software name | (private, redacted) | Same as above |
+| `__AI_3__` | Card 3 AI name | (private, redacted) | Same as above |
+| `__START_3__` | Card 3 start moment | (private, redacted) | Same as above |
+| `__CYCLE_3__` | Card 3 cycle | `7d` | Same as above |
+| `__EXPIRES_3__` | Card 3 expiry moment | (private, redacted) | Optional; if there is no expiry, delete the whole `, expires: "__EXPIRES_3__"` part |
 | `__FOOTER__` | Footer | (private, redacted) | e.g. `© 2026 Your Name` |
-| `__REAL_VIDEO_URL__` | "Real scene" video link | (private, redacted) | Video URL linked from the note that appears when the clock card is clicked; if there is none, delete the whole note |
-| `__REAL_VIDEO_TITLE__` | "Real scene" video title | (private, redacted) | Same as above, the video's title (shown in italics) |
 
 To add a card, copy one line in `CARDS` and change its values per the
 table above; to remove a card, delete its line. `start` only needs to be
 any single reset moment you know — the page rolls it forward
 automatically, so you do not need to work out the next reset date.
 
-Hero assets: `images/hero-video.mp4` and `images/cotton-poster.jpg`
+Hero assets: `images/hero-video.mp4` and `images/forest-poster.jpg`
 ship with the template. You can replace them with your own — either
 overwrite the files keeping the same names, or change the paths in the
-template (`images/hero-video.mp4?v=4` / `images/cotton-poster.jpg?v=4`;
-`?v=4` is a cache-buster, bump the number when you swap assets so
-visitors' browsers do not keep showing the old ones). If you replace the
-video, also update the note that appears when the clock card is clicked
-(`__REAL_VIDEO_URL__` / `__REAL_VIDEO_TITLE__`).
+template (`images/hero-video.mp4?v=5` / `images/forest-poster.jpg?v=5`;
+`?v=5` is a cache-buster, bump the number when you swap assets so
+visitors' browsers do not keep showing the old ones).
 
 ## 4. Deployment steps (in order)
 
@@ -96,14 +95,12 @@ video, also update the note that appears when the clock card is clicked
    the new host, fill in the placeholders from Section 3, drop the
    `.template` suffix, and place it as `token-quota.html` in the site's
    root directory (with `images/` next to it).
-2. Confirm `images/hero-video.mp4` and `images/cotton-poster.jpg` are
+2. Confirm `images/hero-video.mp4` and `images/forest-poster.jpg` are
    reachable (opening those URLs directly shows something).
 3. Open the new URL in a browser and confirm three things: the clock is
    running (and the time is right), the quota cards are counting down,
    and tapping the hero video plays it and tapping again stops it.
-4. Click the clock card and confirm the English note appears below it and
-   its link opens.
-5. Switch the system between light and dark and confirm the page follows
+4. Switch the system between light and dark and confirm the page follows
    and the frosted glass stays.
 
 ## 5. Notes
@@ -111,7 +108,7 @@ video, also update the note that appears when the clock card is clicked
 - The page is purely static and needs no backend; but the clock reads
   server time from the Date header, so it must be accessed over HTTP(S)
   — opening the file directly from disk leaves the clock without a time.
-- `?v=4` is the assets' cache-buster; bump the number after swapping
+- `?v=5` is the assets' cache-buster; bump the number after swapping
   the video or poster, or visitors' browsers may keep showing the old
   ones.
 - Templates are snapshots: after `token-quota.html` changes, regenerate
