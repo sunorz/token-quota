@@ -18,25 +18,10 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
-        /* Dynamic gradient background: a multi-stop linear-gradient sized
-           400% x 400%, slowly flowing via background-position. Single
-           background-image on body — no fixed layer, no filter, no blend
-           mode, so iOS has nothing to drop. Light: warm paper grounding
-           the four pastels. Dark: deep ink grounding the four vivid tones. */
-        background-image: linear-gradient(-45deg, #eef2f7, #bfdbfe, #a5f3fc, #c7d2fe, #a7f3d0, #eef2f7);
-        background-size: 400% 400%;
-        animation: gradientFlow 18s ease infinite;
+        background: #e9eef7;
         color: #1d1d1f;     /* label */
         padding: 48px 16px 64px;
         -webkit-font-smoothing: antialiased;
-    }
-    @keyframes gradientFlow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        body { animation: none; }
     }
     .wrap { max-width: 560px; margin: 0 auto; }
     h1 {
@@ -138,6 +123,14 @@
         background: #ffffff; /* secondarySystemGroupedBackground, light */
         border-radius: 20px;
         overflow: hidden;
+    }
+    /* Read-only quota cards, including dynamically inserted text layers. */
+    #cards, #cards * {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-user-drag: none;
+        -webkit-tap-highlight-color: transparent;
     }
     .card {
         padding: 14px 16px;
@@ -244,7 +237,7 @@
     .reset-time .layer { text-align: right; }
     .countdown .layer.party { font-size: 16px; line-height: 1.2; }
     @media (prefers-color-scheme: dark) {
-        body { background-image: linear-gradient(-45deg, #04060c, #0e1a2e, #0b2a33, #4a6fa5, #0a2420, #04060c); background-size: 400% 400%; animation: gradientFlow 18s ease infinite; color: rgba(255, 255, 255, .87); }
+        body { color: rgba(255, 255, 255, .87); }
         /* Dark mode: soften the hero glass edge — the light-mode white
            highlight (0.22 ring + 0.30 top) looks harsh on a dark page. */
         .hero-glass {
@@ -273,9 +266,23 @@
     .cards, .card { transition: background-color .6s cubic-bezier(.28, .11, .32, 1), border-color .6s cubic-bezier(.28, .11, .32, 1); }
 
     .page-footer { margin-top: 16px; text-align: center; font-size: 12px; color: #8e8e93; }
+    /* Canvas 2D color strata: no SVG filters or SMIL dependency. */
+    :root { color-scheme: light dark; --sand-base: #dde9ee; }
+    html { min-height: 100%; background: var(--sand-base); }
+    body { min-height: 100vh; background: var(--sand-base); }
+    .sand-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden;
+        pointer-events: none; -webkit-user-select: none; user-select: none;
+        background: linear-gradient(135deg, #a9d5d8, #c5b5d6, #eccab7); }
+    .sand-art { display: block; width: 100%; height: 100%; }
+    .wrap, .page-footer { position: relative; z-index: 1; }
+    @media (prefers-color-scheme: dark) {
+        :root { --sand-base: #0c1423; }
+        .sand-bg { background: linear-gradient(135deg, #123b43, #423662, #663c52); }
+    }
 </style>
 </head>
 <body>
+<div class="sand-bg" aria-hidden="true"><canvas class="sand-art" id="sand-canvas"></canvas></div>
 <div class="wrap">
     <h1>Token Quota</h1>
     <div class="hero">
@@ -325,6 +332,15 @@ const CARDS = [
 ];
 
 const box = document.getElementById('cards');
+// Keep card taps, text selection, dragging and long-press menus inactive.
+// Leave touch scrolling and pinch zoom available.
+for (const eventName of ['click', 'dblclick', 'auxclick', 'contextmenu', 'selectstart', 'dragstart']) {
+    box.addEventListener(eventName, function(event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }, { capture: true, passive: false });
+}
+
 const COUNTDOWN_WINDOW = 600000; // 10 minutes in ms
 const CELEBRATION_MS = 10000;    // how long the emoji stays after zero
 
@@ -659,6 +675,95 @@ setInterval(tick, 31);
 if (darkMode.addEventListener) darkMode.addEventListener('change', paintColors);
 
 
+
+
+// Canvas 2D fallback replaces SVG displacement on every platform.
+(function () {
+    var canvas = document.getElementById('sand-canvas');
+    if (!canvas || !canvas.getContext) return;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    var theme = window.matchMedia('(prefers-color-scheme: dark)');
+    var light = [[0,[179,214,214]],[.22,[151,195,211]],[.34,[175,185,215]],[.39,[211,214,228]],[.44,[185,181,210]],[.56,[197,184,213]],[.65,[211,188,207]],[.78,[234,219,207]],[.90,[213,207,182]],[1,[179,214,214]]];
+    var dark = [[0,[18,48,58]],[.22,[27,60,80]],[.34,[42,49,79]],[.39,[61,69,93]],[.44,[48,45,77]],[.56,[59,47,82]],[.65,[74,48,75]],[.78,[86,66,66]],[.90,[65,65,52]],[1,[18,48,58]]];
+    var lut = new Uint8Array(3072), field = new Float32Array(4096);
+    var seed = 17431, img, grain, w, h, last = -100, elapsed = 0, prev = 0;
+    function random() { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }
+    for (var i = 0; i < field.length; i++) field[i] = random();
+    function noise(x, y) {
+        var ix = Math.floor(x), iy = Math.floor(y), a = x - ix, b = y - iy;
+        a = a*a*(3-2*a); b = b*b*(3-2*b);
+        var x0 = ix & 63, x1 = (ix+1)&63, y0 = (iy&63)*64, y1 = ((iy+1)&63)*64;
+        var top = field[y0+x0]*(1-a)+field[y0+x1]*a;
+        var bottom = field[y1+x0]*(1-a)+field[y1+x1]*a;
+        return top*(1-b)+bottom*b;
+    }
+    function palette() {
+        var compact = window.innerWidth <= 600;
+        var stops = (theme.matches ? dark : light).map(function(stop) {
+            var position = stop[0], color = stop[1].slice();
+            if (compact) {
+                if (position === .34) position = .365;
+                if (position === .44) position = .415;
+                if (position === .39) color = color.map(function(c) { return Math.min(255,c+8); });
+            }
+            return [position,color];
+        }), j = 0;
+        for (var n = 0; n < 1024; n++) {
+            var v = n/1023;
+            while (j < stops.length-2 && v > stops[j+1][0]) j++;
+            var f = (v-stops[j][0])/(stops[j+1][0]-stops[j][0]);
+            for (var c = 0; c < 3; c++) lut[n*3+c] = stops[j][1][c]*(1-f)+stops[j+1][1][c]*f;
+        }
+        last = -100;
+    }
+    function resize() {
+        var width = Math.max(1, window.innerWidth), height = Math.max(1, window.innerHeight);
+        var scale = Math.min(.65, 480/Math.max(width,height), Math.sqrt(100000/(width*height)));
+        w = canvas.width = Math.max(1,Math.round(width*scale));
+        h = canvas.height = Math.max(1,Math.round(height*scale));
+        img = ctx.createImageData(w,h); grain = new Float32Array(w*h);
+        for (var n=0;n<grain.length;n++) grain[n] = (random()-.5)*2.5;
+        palette();
+        last = -100;
+    }
+    function paint(t) {
+        var pixels = img.data, unit = Math.max(w,h), drift = t*.006;
+        var compact = window.innerWidth <= 600;
+        for (var y=0;y<h;y++) {
+            var ny = compact ? y/h : y/unit;
+            for (var x=0;x<w;x++) {
+                var nx = compact ? x/w : x/unit;
+                var broad = noise(nx*2.0+12+drift,ny*2.0+9-drift*.4)-.5;
+                var fine = noise(nx*4.5+31-drift*.35,ny*4.5+19+drift*.25)-.5;
+                // Portrait composition places the ridge across the lower exposed area.
+                var v = compact
+                    ? ny*.52+nx*.28+broad*.24+fine*.025-.14+Math.sin(t*.025)*.025
+                    : ny*.72+nx*.22+broad*.38+fine*.04+.13+Math.sin(t*.025)*.055;
+                v = ((v%2)+2)%2; if (v>1) v=2-v;
+                var l = Math.min(1023,Math.floor(v*1023))*3;
+                var n = y*w+x, p=n*4, g=grain[n]*(theme.matches?.6:1);
+                pixels[p]=lut[l]+g; pixels[p+1]=lut[l+1]+g; pixels[p+2]=lut[l+2]+g; pixels[p+3]=255;
+            }
+        }
+        ctx.putImageData(img,0,0);
+        canvas.setAttribute('data-painted','true');
+    }
+    function frame(now) {
+        if (!document.hidden) {
+            if (prev) elapsed += Math.min(now-prev,100);
+            if (now-last>=70) { paint(elapsed/1000); last=now; }
+        }
+        prev=now;
+        window.requestAnimationFrame(frame);
+    }
+    palette(); resize(); paint(0);
+    window.addEventListener('resize',resize);
+    if (theme.addEventListener) theme.addEventListener('change',palette);
+    else if (theme.addListener) theme.addListener(palette);
+    document.addEventListener('visibilitychange',function(){ prev=0; last=-100; });
+    window.requestAnimationFrame(frame);
+})();
 
 // Hero clock: the SERVER's time in CST (UTC+8), not the viewer's local time.
 // The server clock is read from the Date header of a HEAD request; the offset
