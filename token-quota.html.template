@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Token Quota</title>
+<meta name="description" content="__META_DESCRIPTION__">
+<link rel="canonical" href="__PAGE_URL__">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Token Quota">
+<meta property="og:description" content="__META_DESCRIPTION__">
+<meta property="og:url" content="__PAGE_URL__">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Token Quota">
+<meta name="twitter:description" content="__META_DESCRIPTION__">
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        /* Dynamic gradient background: a multi-stop linear-gradient sized
+           400% x 400%, slowly flowing via background-position. Single
+           background-image on body — no fixed layer, no filter, no blend
+           mode, so iOS has nothing to drop. Light: warm paper grounding
+           the four pastels. Dark: deep ink grounding the four vivid tones. */
+        background-image: linear-gradient(-45deg, #eef2f7, #bfdbfe, #a5f3fc, #c7d2fe, #a7f3d0, #eef2f7);
+        background-size: 400% 400%;
+        animation: gradientFlow 18s ease infinite;
+        color: #1d1d1f;     /* label */
+        padding: 48px 16px 64px;
+        -webkit-font-smoothing: antialiased;
+    }
+    @keyframes gradientFlow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        body { animation: none; }
+    }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    h1 {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 34px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 24px;
+    }
+    /* Hero image card above the list: the photo is covered by a frosted-glass
+       overlay (backdrop blur + translucent tint); white date/time text sits
+       on top and ticks every second. */
+    .hero {
+        position: relative;
+        border-radius: 20px;
+        overflow: hidden;
+        margin-bottom: 16px;
+        cursor: pointer;
+        aspect-ratio: 400 / 169;
+        /* Poster as the hero's own background: the photo is the base layer
+           behind the video, so it survives even if the video element or its
+           poster frame drops out when the theme toggles (iOS
+           backdrop-filter/video compositing glitch on re-render). */
+        background: url(images/cotton-poster.jpg?v=4) center 50% / cover no-repeat;
+    }
+    .hero video {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 50%;
+        pointer-events: none;
+    }
+    /* Static first-frame fallback: shown only when the video cannot play
+       at all (incompatible codec / failed load). No movement, no error. */
+    .hero-fallback {
+        display: none;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 50%;
+    }
+    .hero.hero--no-video video { display: none; }
+    .hero.hero--no-video .hero-fallback { display: block; }
+    .hero-glass {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 8px;
+        padding-left: 28px;
+        /* Frosted glass (restored): blur + tint cover the photo; hover (mouse)
+           or tap (touch) fades the whole overlay + clock away to reveal the
+           clear photo, and moving away / tapping elsewhere restores it. */
+        background: rgba(0, 0, 0, 0.28);
+        /* Own compositor layer: without it iOS can drop the
+           backdrop-filter (the frost) when a theme switch restyles
+           the page. */
+        transform: translateZ(0);
+        backdrop-filter: blur(12px) saturate(1.2);
+        -webkit-backdrop-filter: blur(12px) saturate(1.2);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.30);
+        color: #ffffff;
+        text-align: left;
+        transition: opacity .45s cubic-bezier(.28,.11,.32,1),
+                    backdrop-filter .45s cubic-bezier(.28,.11,.32,1),
+                    -webkit-backdrop-filter .45s cubic-bezier(.28,.11,.32,1);
+    }
+    .hero.hero--revealed .hero-glass {
+        opacity: 0;
+        backdrop-filter: blur(0px) saturate(1);
+        -webkit-backdrop-filter: blur(0px) saturate(1);
+        pointer-events: none;
+    }
+    .hero-date {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        opacity: 0.95;
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+    }
+    .hero-time {
+        font-size: 56px;
+        font-weight: 300;
+        letter-spacing: 0.01em;
+        line-height: 1.05;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+    }
+    /* Note revealed by clicking the clock: small text below the hero card,
+       stays until the page is refreshed. */
+    .hero-note {
+        font-size: 13px;
+        line-height: 1.5;
+        color: #6e6e73; /* secondaryLabel */
+        margin: -8px 4px 16px;
+    }
+    .hero-note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    .hero-note a em { font-style: italic; }
+    /* Apple HIG grouped list: one shared surface, hairline rows, no shadow.
+       Semantic colors only — surfaces and labels adapt to dark mode.
+       The .card elements below are the rows; the class name stays 'card'
+       so the JS (which selects .card) is untouched — only the presentation
+       changed from separate cards to list rows. */
+    .cards {
+        background: #ffffff; /* secondarySystemGroupedBackground, light */
+        border-radius: 20px;
+        overflow: hidden;
+    }
+    .card {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(60, 60, 67, .12); /* separator */
+    }
+    .card:last-child { border-bottom: none; }
+    .head {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    /* Status dot, same idea as the security dashboard's: green by default,
+       breathing slowly like an old phone's notification LED — 4.6s a cycle. */
+    .status-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #34c759; /* systemGreen */
+        animation: breathe 4.6s ease-in-out infinite;
+    }
+    @keyframes breathe {
+        0%, 100% { opacity: .35; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.15); }
+    }
+    .status-dot.dead {
+        /* Expired: no breathing, just a faint steady green — like the power
+           is off. Same dim level as the bottom of the breathing cycle. */
+        animation: none;
+        opacity: .35;
+    }
+    .titles { flex: 1 1 auto; min-width: 0; }
+    .software {
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.3;
+    }
+    .ai {
+        font-size: 15px;
+        font-weight: 500;
+        margin-top: 2px;
+    }
+    /* A dead card's names go gray — the identity fades with the card. */
+    .card.expired .software, .card.expired .ai { color: #8e8e93; }
+    .countdown {
+        flex: 0 0 auto;
+        display: grid;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+        /* Neutral systemFill, never an identity color: a tinted chip behind
+           a time reads as a status (red = failed, green = ok, yellow =
+           warning), which a countdown must never imply. */
+        background: rgba(120, 120, 128, .12);
+        color: #1d1d1f;
+        transition: background-color .6s cubic-bezier(.28, .11, .32, 1);
+    }
+    .reset-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 6px;
+        margin-left: 24px; /* align with the titles (dot 8px + gap 16px) */
+    }
+    .reset-label {
+        font-size: 13px;
+        color: #6e6e73; /* secondaryLabel */
+        white-space: nowrap;
+    }
+    .reset-time {
+        display: grid;
+        font-size: 17px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    /* A dead card's expiry time is red — here, and only here, red means
+       something: the time is over. Same dusty red as the palette. */
+    .reset-time.expired { color: #bc5f5f; }
+    /* True crossfade, Apple style: old and new text are stacked in the same
+       grid cell and travel together — the new layer fades in from a slight
+       scale and blur while the old one fades out, so there is never an
+       empty gap. Only opacity, transform and filter are animated, on
+       Apple's signature curve cubic-bezier(.28, .11, .32, 1). */
+    .countdown .layer, .reset-time .layer {
+        grid-area: 1 / 1;
+        white-space: nowrap;
+        opacity: 0;
+        transform: scale(.95);
+        filter: blur(3px);
+        transition: opacity .6s cubic-bezier(.28, .11, .32, 1),
+                    transform .6s cubic-bezier(.28, .11, .32, 1),
+                    filter .6s cubic-bezier(.28, .11, .32, 1);
+    }
+    .countdown .layer.show, .reset-time .layer.show {
+        opacity: 1;
+        transform: none;
+        filter: blur(0);
+    }
+    .countdown .layer { text-align: right; }
+    .reset-time .layer { text-align: right; }
+    .countdown .layer.party { font-size: 16px; line-height: 1.2; }
+    @media (prefers-color-scheme: dark) {
+        body { background-image: linear-gradient(-45deg, #04060c, #0e1a2e, #0b2a33, #4a6fa5, #0a2420, #04060c); background-size: 400% 400%; animation: gradientFlow 18s ease infinite; color: rgba(255, 255, 255, .87); }
+        /* Dark mode: soften the hero glass edge — the light-mode white
+           highlight (0.22 ring + 0.30 top) looks harsh on a dark page. */
+        .hero-glass {
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.14);
+        }
+        .cards { background: #1c1c1e; }
+        .card { border-bottom-color: rgba(84, 84, 88, .45); }
+        .reset-label { color: #98989f; }
+        .hero-note { color: #98989f; }
+        .countdown { background: rgba(120, 120, 128, .24); color: rgba(255, 255, 255, .87); }
+        .status-dot { background: #30d158; }
+        /* Dark spec: no pure-white text — the 56px clock is the biggest
+           light area on the page, so it drops to 87% white like the
+           body text. */
+        .hero-glass { color: rgba(255, 255, 255, .87); }
+        .reset-time.expired { color: #cf8282; }
+        .card.expired .software, .card.expired .ai { color: #98989d; }
+    }
+    /* Smooth theme switch WITHOUT the View Transitions API: its
+       snapshot flattens the page into an image, and on iOS that drops
+       the hero's backdrop-filter — every toggle stripped the clock's
+       frost. Instead the text, cards and chip ease via plain CSS
+       transitions (the gradient itself still flips instantly; it
+       cannot transition). */
+    body { transition: color .6s cubic-bezier(.28, .11, .32, 1); }
+    .cards, .card { transition: background-color .6s cubic-bezier(.28, .11, .32, 1), border-color .6s cubic-bezier(.28, .11, .32, 1); }
+
+    .page-footer { margin-top: 16px; text-align: center; font-size: 12px; color: #8e8e93; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <h1>Token Quota</h1>
+    <div class="hero">
+        <video src="images/hero-video.mp4?v=4" poster="images/cotton-poster.jpg?v=4" muted loop playsinline webkit-playsinline preload="auto"></video>
+        <img class="hero-fallback" src="images/cotton-poster.jpg?v=4" alt="" aria-hidden="true">
+        <div class="hero-glass">
+            <div class="hero-date" id="hero-date"></div>
+            <div class="hero-time" id="hero-time"></div>
+        </div>
+    </div>
+    <div class="hero-note" id="hero-note" hidden>This video is AI-generated by MuseAI. Click here to see the real Xinjiang cotton harvest scene: <a href="__REAL_VIDEO_URL__" target="_blank" rel="noopener"><em>__REAL_VIDEO_TITLE__</em></a></div>
+    <div class="cards" id="cards"></div>
+</div>
+
+<script>
+
+// ============================================================
+// Card data: add, remove or edit cards here, one line per card.
+// Format: { software: "App name", ai: "AI name", start: "One known reset moment", cycle: "Period" }
+//   start: any single reset moment you know, in Beijing time (CST),
+//          e.g. "2027-01-01 00:00:00".
+//   cycle: reset period — "7d" = 7 days, "24h" = 24 hours, "30d" = 30 days.
+//   expires (optional): a fixed expiry moment, e.g. "2026-12-31 23:59:59".
+// The page derives the next reset from the current CST time automatically,
+// so you never need to update the dates by hand.
+// Cards are sorted by next reset, soonest first.
+// When a reset is less than 10 minutes away, the countdown chip switches
+// to a live millisecond countdown. At zero the chip crossfades to a
+// celebration emoji and the Next reset time crossfades to the following
+// cycle right away; 10 seconds later the chip crossfades back and the
+// card drops to wherever its new reset time belongs in the order —
+// not necessarily the bottom.
+// After a card's expires moment, the status dot stops breathing and stays
+// a faint steady green (like the power is off), the chip crossfades to an
+// hourglass ⌛ with no background behind it, the Next reset row shows the
+// expiry moment itself and stops rolling over, and the card sinks to the
+// bottom.
+// The label follows the value: a card counting toward a reset says
+// "Next reset"; one counting toward its expiry says "Expires"; a dead
+// card says "Expired". When the expiry comes before the next reset, the
+// expiry is the target — there is no next reset at all.
+// ============================================================
+const CARDS = [
+    { software: "__SOFTWARE_1__", ai: "__AI_1__", start: "__START_1__", cycle: "__CYCLE_1__" },
+    { software: "__SOFTWARE_2__", ai: "__AI_2__", start: "__START_2__", cycle: "__CYCLE_2__", expires: "__EXPIRES_2__" },
+    // { software: "App name", ai: "AI name", start: "2027-01-01 00:00:00", cycle: "7d" },
+];
+
+const box = document.getElementById('cards');
+const COUNTDOWN_WINDOW = 600000; // 10 minutes in ms
+const CELEBRATION_MS = 10000;    // how long the emoji stays after zero
+
+function parseTime(s) {
+    // Parse "2027-01-01 00:00:00" as Beijing time (CST, UTC+8)
+    return new Date(s.replace(' ', 'T') + '+08:00');
+}
+
+function parseCycle(s) {
+    // "7d" / "24h" / "30m" -> milliseconds
+    const m = /^(\d+(?:\.\d+)?)(d|h|m)$/.exec(String(s).trim());
+    if (!m) return NaN;
+    return parseFloat(m[1]) * { d: 86400000, h: 3600000, m: 60000 }[m[2]];
+}
+
+function nextReset(anchor, period, now) {
+    // Resets happen every period starting from anchor; find the first one after now
+    const k = Math.floor((now - anchor) / period) + 1;
+    return new Date(anchor.getTime() + k * period);
+}
+
+function isExpired(c, now) {
+    // A card with an expires moment is dead once that moment has passed
+    return !!c.expires && now >= c.expires.getTime();
+}
+
+function effectiveTarget(c, now) {
+    // The moment this card is counting toward: the next reset, unless the
+    // expiry comes first — then the expiry is the target, and there is no
+    // next reset at all.
+    const reset = nextReset(c.anchor, c.period, now);
+    return (c.expires && c.expires < reset) ? c.expires : reset;
+}
+
+function targetIsExpiry(c, target) {
+    // Is the value this card shows an expiry rather than a reset?
+    return !!c.expires && c.expires.getTime() === target.getTime();
+}
+
+function initialTarget(c, now) {
+    // The moment this card is counting toward. If the page opens within the
+    // celebration window right after a reset, keep that just-passed reset as
+    // the target so the celebration still shows — unless the expiry comes
+    // first, in which case the expiry is the target.
+    let t = nextReset(c.anchor, c.period, now);
+    const prev = new Date(t.getTime() - c.period);
+    if (now - prev.getTime() < CELEBRATION_MS) t = prev;
+    if (c.expires && c.expires < t) t = c.expires;
+    return t;
+}
+
+function fmtCST(d) {
+    // Format as "2027-01-01 00:00:00" in Beijing time
+    const c = new Date(d.getTime() + 8 * 3600000);
+    const p = n => String(n).padStart(2, '0');
+    return c.getUTCFullYear() + '-' + p(c.getUTCMonth() + 1) + '-' + p(c.getUTCDate()) +
+        ' ' + p(c.getUTCHours()) + ':' + p(c.getUTCMinutes()) + ':' + p(c.getUTCSeconds());
+}
+
+function countdownText(t, now) {
+    const diff = t - now;
+    if (diff <= 0) return 'Resetting…';
+    const min = Math.floor(diff / 60000);
+    const d = Math.floor(min / 1440);
+    const h = Math.floor(min % 1440 / 60);
+    const m = min % 60;
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+}
+
+function fmtCountdown(ms) {
+    // "09:58.123" — minutes : seconds . milliseconds
+    const p2 = n => String(n).padStart(2, '0');
+    return p2(Math.floor(ms / 60000)) + ':' + p2(Math.floor(ms % 60000 / 1000)) +
+        '.' + String(Math.floor(ms % 1000)).padStart(3, '0');
+}
+
+// One color per AI, always the same color for the same AI.
+// The palette follows Apple's restraint: one muted family — every hue is
+// desaturated into the same soft register (dusty, low-chroma tones like
+// Apple's product colorways), so the set reads as one family, never a
+// rainbow. Pairs are [light mode, dark mode]; the hues stay in the same
+// order, only the saturation is tamed.
+// Assignment follows the order AIs first appear in CARDS.
+const AI_COLOR_PAIRS = [
+    ['#bc5f5f', '#cf8282'], // dusty red
+    ['#5f83a8', '#84a9cc'], // mist blue
+    ['#619a72', '#87b696'], // sage green
+    ['#8f7bb0', '#ab97c9'], // muted lavender
+    ['#bd8a52', '#d1a76e'], // soft clay
+    ['#55979a', '#7db3b5'], // muted teal
+    ['#bd7a95', '#d29ab0'], // dusty pink
+    ['#6f77a8', '#939bc4'], // slate indigo
+];
+const aiIndex = {};
+for (const c of CARDS) {
+    if (!(c.ai in aiIndex)) aiIndex[c.ai] = Object.keys(aiIndex).length;
+}
+const darkMode = window.matchMedia('(prefers-color-scheme: dark)');
+// Effective theme: the OS setting, full stop — there is no manual
+// override anymore (the toggle button was removed 2026-11-25; the page
+// follows the system like Bing's "System default"). The AI identity
+// colors follow this.
+function effectiveDark() {
+    return darkMode.matches;
+}
+function aiColorOf(ai) {
+    const pair = AI_COLOR_PAIRS[aiIndex[ai] % AI_COLOR_PAIRS.length];
+    return effectiveDark() ? pair[1] : pair[0];
+}
+
+const items = CARDS
+    .map(c => ({ ...c, anchor: parseTime(c.start), period: parseCycle(c.cycle),
+        expires: c.expires ? parseTime(c.expires) : null }))
+    .filter(c => !isNaN(c.period))
+    .sort((a, b) => {
+        // Live cards first, by next reset; expired cards last, by expiry
+        const now = Date.now();
+        const ea = isExpired(a, now), eb = isExpired(b, now);
+        if (ea !== eb) return ea - eb;
+        return ea ? a.expires - b.expires
+            : effectiveTarget(a, now) - effectiveTarget(b, now);
+    });
+
+for (const c of items) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML =
+        '<div class="head">' +
+            '<span class="status-dot"></span>' +
+            '<div class="titles"><div class="software"></div><div class="ai"></div></div>' +
+            '<div class="countdown"><span class="layer show"></span></div>' +
+        '</div>' +
+        '<div class="reset-row"><span class="reset-label">Next reset</span>' +
+        '<span class="reset-time"><span class="layer show"></span></span></div>';
+    el.querySelector('.software').textContent = c.software;
+    el.querySelector('.ai').textContent = c.ai;
+    el._quota = c;
+    el._expired = isExpired(c, Date.now());
+    el._target = el._expired ? c.expires : initialTarget(c, Date.now());
+    el._aiEl = el.querySelector('.ai');
+    el._cd = el.querySelector('.countdown');
+    el._rt = el.querySelector('.reset-time');
+    el._dot = el.querySelector('.status-dot');
+    // Same 4.6s breathing cycle for every card, but each dot starts at a
+    // random point in the cycle, so they never pulse in lockstep
+    el._dot.style.animationDelay = (-Math.random() * 4.6).toFixed(2) + 's';
+    el._rtLabel = el.querySelector('.reset-label');
+    // The reset moment shown on the card. It jumps to the following cycle the
+    // instant the countdown ends, while _target (used for sorting) only
+    // advances after the celebration, so the card only then drops to the
+    // position its new reset time earns in the order.
+    const remain0 = el._target.getTime() - Date.now();
+    el._chipState = el._expired ? 'expired'
+        : (remain0 > COUNTDOWN_WINDOW ? 'normal' : (remain0 > 0 ? 'counting' : 'party'));
+    el._shownReset = el._expired ? c.expires
+        : (el._chipState === 'party' ? new Date(el._target.getTime() + c.period) : el._target);
+    el._rtLabel.textContent = el._expired ? 'Expired'
+        : (targetIsExpiry(c, el._target) ? 'Expires' : 'Next reset');
+    if (el._expired) {
+        const l = el._cd.querySelector('.layer');
+        l.textContent = '⌛';
+        l.classList.add('party');
+        el._cd.style.backgroundColor = 'transparent';
+        el._dot.classList.add('dead');
+        el._rt.classList.add('expired');
+        el.classList.add('expired');
+    } else if (el._chipState === 'party') {
+        const l = el._cd.querySelector('.layer');
+        l.textContent = '🎉';
+        l.classList.add('party');
+        el._cd.style.backgroundColor = 'transparent';
+    }
+    box.appendChild(el);
+}
+
+function paintColors() {
+    document.querySelectorAll('.card').forEach(el => {
+        // The AI color lives on the name only, where color means identity.
+        // The countdown chip is never tinted with it: color behind a time
+        // would read as a status, not a name. A dead card's name is gray
+        // instead, so clear any inline color and let the CSS rule show.
+        if (el._expired) el._aiEl.style.color = '';
+        else el._aiEl.style.color = aiColorOf(el._quota.ai);
+    });
+}
+
+function sortCards() {
+    // Reorder by target reset, soonest first, sliding cards smoothly (FLIP)
+    const cards = [...box.children];
+    const tops = new Map(cards.map(el => [el, el.getBoundingClientRect().top]));
+    cards.sort((a, b) => {
+        // Live cards first, by next reset; expired cards last, by expiry
+        if (a._expired !== b._expired) return a._expired - b._expired;
+        return a._expired ? a._quota.expires - b._quota.expires : a._target - b._target;
+    }).forEach(el => box.appendChild(el));
+    for (const el of cards) {
+        const dy = tops.get(el) - el.getBoundingClientRect().top;
+        if (dy) {
+            el.style.transition = 'none';
+            el.style.transform = 'translateY(' + dy + 'px)';
+            requestAnimationFrame(() => {
+                el.style.transition = 'transform .55s cubic-bezier(.28, .11, .32, 1)';
+                el.style.transform = '';
+            });
+        }
+    }
+}
+
+function ensureTargets(now) {
+    // Once the celebration window has passed, aim the card at its following
+    // reset — its target jumps a full cycle ahead, so the sort sinks it.
+    let advanced = false;
+    document.querySelectorAll('.card').forEach(el => {
+        if (el._expired || isExpired(el._quota, now)) return;
+        if (now >= el._target.getTime() + CELEBRATION_MS) {
+            el._target = effectiveTarget(el._quota, now);
+            advanced = true;
+        }
+    });
+    return advanced;
+}
+
+function curLayer(elm) {
+    return elm.querySelector('.layer.show') || elm.querySelector('.layer');
+}
+
+function setLayerText(elm, text) {
+    const l = curLayer(elm);
+    if (l && l.textContent !== text) l.textContent = text;
+}
+
+function crossfade(elm, text, party) {
+    // Stack the new text over the old and travel both together: the new
+    // layer fades in while the old fades out — a true crossfade with no
+    // empty moment in between, starting from the current on-screen state
+    const old = curLayer(elm);
+    const layer = document.createElement('span');
+    layer.className = 'layer' + (party ? ' party' : '');
+    layer.textContent = text;
+    elm.appendChild(layer);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        layer.classList.add('show');
+        if (old) old.classList.remove('show');
+    }));
+    setTimeout(() => { if (old && old !== layer) old.remove(); }, 750);
+}
+
+function renderCard(el, now) {
+    // A card can cross its expiry while the page is open: flip it dead here
+    if (!el._expired && isExpired(el._quota, now)) {
+        el._expired = true;
+        el._chipState = 'expired';
+        crossfade(el._cd, '⌛', true);
+        el._cd.style.backgroundColor = 'transparent';
+        el._dot.classList.add('dead');
+        el._rt.classList.add('expired');
+        el.classList.add('expired');
+        // Clear the inline AI color at once: paintColors only re-runs every
+        // minute, and until it does the inline color beats the gray CSS rule
+        el._aiEl.style.color = '';
+        el._shownReset = el._quota.expires;
+    }
+    // The label follows the value: a reset is "Next reset", an expiry is
+    // "Expires", a dead card is "Expired"
+    const label = el._expired ? 'Expired'
+        : (targetIsExpiry(el._quota, el._target) ? 'Expires' : 'Next reset');
+    if (el._rtLabel.textContent !== label) el._rtLabel.textContent = label;
+    if (el._expired) {
+        setLayerText(el._rt, fmtCST(el._shownReset));
+        return;
+    }
+    const remaining = el._target.getTime() - now;
+    const state = remaining > COUNTDOWN_WINDOW ? 'normal' : (remaining > 0 ? 'counting' : 'party');
+    if (state !== el._chipState) {
+        const prev = el._chipState;
+        el._chipState = state;
+        if (state === 'party') {
+            // Zero: the countdown crossfades to the emoji, and the Next reset
+            // time refreshes to the following cycle at the same moment,
+            // crossfading too — the card itself sinks only after the delay
+            el._shownReset = new Date(el._target.getTime() + el._quota.period);
+            crossfade(el._cd, '🎉', true);
+            crossfade(el._rt, fmtCST(el._shownReset));
+            // The emoji floats free: the chip background fades away with it
+            el._cd.style.backgroundColor = 'transparent';
+        } else if (prev === 'party') {
+            // Celebration over: crossfade back to the countdown text, and
+            // clearing the inline background lets the neutral fill fade back
+            crossfade(el._cd, countdownText(el._target, now), false);
+            el._cd.style.backgroundColor = '';
+        } else if (state === 'counting') {
+            setLayerText(el._cd, fmtCountdown(remaining));
+        } else {
+            setLayerText(el._cd, countdownText(el._target, now));
+        }
+    } else {
+        if (state === 'counting') setLayerText(el._cd, fmtCountdown(remaining));
+        else if (state === 'normal') setLayerText(el._cd, countdownText(el._target, now));
+    }
+    setLayerText(el._rt, fmtCST(el._shownReset));
+}
+
+function refresh() {
+    const now = Date.now();
+    ensureTargets(now);
+    document.querySelectorAll('.card').forEach(el => renderCard(el, now));
+    sortCards();
+    paintColors();
+}
+refresh();
+// Re-derive from the current time every minute
+setInterval(refresh, 60000);
+
+// Fast tick for the final 10 minutes: millisecond countdown, the emoji at
+// zero, and the sink 10 seconds later
+function tick() {
+    const now = Date.now();
+    const advanced = ensureTargets(now);
+    let flipped = false;
+    document.querySelectorAll('.card').forEach(el => {
+        const was = el._expired;
+        renderCard(el, now);
+        if (!was && el._expired) flipped = true;
+    });
+    if (advanced || flipped) sortCards();
+}
+setInterval(tick, 31);
+
+// Repaint with the dark-mode color variants when the system theme flips
+if (darkMode.addEventListener) darkMode.addEventListener('change', paintColors);
+
+
+
+// Hero clock: the SERVER's time in CST (UTC+8), not the viewer's local time.
+// The server clock is read from the Date header of a HEAD request; the offset
+// is re-synced every minute so the seconds keep ticking accurately.
+let serverOffset = 0; // server time (ms epoch) minus client time
+function syncServerTime() {
+    fetch(location.href, { method: 'HEAD', cache: 'no-store' })
+        .then(r => {
+            const d = r.headers.get('Date');
+            if (d) {
+                const t = Date.parse(d);
+                if (!isNaN(t)) serverOffset = t - Date.now();
+            }
+        })
+        .catch(() => { /* keep the last offset; fallback is client time */ });
+}
+function updateHeroClock() {
+    // Server moment, rendered as CST (UTC+8) wall-clock time.
+    const now = new Date(Date.now() + serverOffset + 8 * 3600 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    const week = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getUTCDay()];
+    const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][now.getUTCMonth()];
+    const dateEl = document.getElementById('hero-date');
+    const timeEl = document.getElementById('hero-time');
+    if (dateEl) dateEl.textContent = week + ', ' + mon + ' ' + now.getUTCDate() + ', ' + now.getUTCFullYear() + ' · UTC+8';
+    if (timeEl) timeEl.textContent = pad(now.getUTCHours()) + ':' + pad(now.getUTCMinutes()) + ':' + pad(now.getUTCSeconds());
+}
+syncServerTime();
+updateHeroClock();
+setInterval(updateHeroClock, 1000);
+setInterval(syncServerTime, 60000);
+
+// Hero reveal: hover (mouse) or tap (touch) hides the frosted overlay +
+// clock, revealing the clear video. Moving away / tapping elsewhere restores it.
+// The video is still on load; it only plays (looping) while revealed, and
+// stops — pause + back to the first frame, not just pause — when hidden.
+(function() {
+    var hero = document.querySelector('.hero');
+    if (!hero) return;
+    var vid = hero.querySelector('video');
+    function playVid() {
+        if (!vid || hero.classList.contains('hero--no-video')) return;
+        var p = vid.play();
+        if (p) p.catch(function(err) {
+            if (err && err.name === 'NotSupportedError') useStaticFallback();
+        });
+    }
+    function stopVid() {
+        if (!vid) return;
+        vid.pause();
+        vid.currentTime = 0;
+        // Some browsers drop a seek issued in the same tick as pause(),
+        // leaving the video frozen on the stopped frame instead of the
+        // first frame. If the seek did not land within 250ms, reload the
+        // element, which always restores the first frame. Skipped when
+        // the hero was revealed again meanwhile (quick re-hover).
+        setTimeout(function() {
+            if (!hero.classList.contains('hero--revealed') && vid.currentTime !== 0) vid.load();
+        }, 250);
+    }
+    // If the video cannot play at all (incompatible / failed load), freeze
+    // on the first frame: show the static image, never an error, never a
+    // half-playing video.
+    function useStaticFallback() { hero.classList.add('hero--no-video'); }
+    if (vid) {
+        vid.addEventListener('error', useStaticFallback);
+        if (vid.canPlayType && vid.canPlayType('video/mp4; codecs="avc1.42E01E"') === '') useStaticFallback();
+    }
+    var finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (finePointer) {
+        hero.addEventListener('mouseenter', function() { hero.classList.add('hero--revealed'); playVid(); });
+        hero.addEventListener('mouseleave', function() { hero.classList.remove('hero--revealed'); stopVid(); });
+    } else {
+        hero.addEventListener('click', function(e) {
+            e.stopPropagation();
+            hero.classList.toggle('hero--revealed');
+            if (hero.classList.contains('hero--revealed')) playVid(); else stopVid();
+        });
+        document.addEventListener('click', function(e) {
+            if (!hero.contains(e.target)) { hero.classList.remove('hero--revealed'); stopVid(); }
+        });
+    }
+    // Clock note: clicking the hero (clock) card reveals a small note
+    // below it. It stays until the page is refreshed (no toggle off).
+    // This sits outside the fine-pointer/touch branch on purpose, so it
+    // runs on both. (It was inside the touch-only branch before, which is
+    // why desktop clicks never showed the note.)
+    // The handler is on .hero, not .hero-glass: on desktop the glass
+    // turns pointer-events:none on hover, so a glass-only handler would
+    // never fire when the mouse is over the clock.
+    var note = document.getElementById('hero-note');
+    if (note) {
+        hero.addEventListener('click', function() { note.hidden = false; });
+    }
+})();
+</script>
+    <footer class="page-footer">__FOOTER__</footer>
+</body>
+</html>
